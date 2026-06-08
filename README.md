@@ -1,32 +1,40 @@
 # Autonomous Builder
 
-> A Discord-controlled autonomous app builder powered by [Hermes Agent](https://github.com/NousResearch/hermes-agent) by Nous Research.
+> A Discord-controlled autonomous web app pipeline powered by [Hermes Agent](https://github.com/NousResearch/hermes-agent) by Nous Research.
 
-You describe what you want built. The agent asks clarifying questions, writes a plan, waits for your approval, then builds it locally — one folder per project, zero manual coding.
+You describe what you want built. The agent clarifies, plans, waits for your approval, builds, runs a security review, deploys to Vercel, and pushes to GitHub — without you touching a terminal.
 
 ---
 
 ## How It Works
 
-Send a message to a Discord bot. Get a working application back.
+Send a message in Discord. Get a live URL and a GitHub repo back.
 
 ```
 Discord message
       ↓
 Clarification       up to 3 rounds of questions
       ↓
-Planning            writes PLAN.md inside a new project folder
+Planning            writes PLAN.md, placeholder .env
       ↓
-Approval Gate       stops and waits for your YES
+Approval Gate ←──── hard stop — waits for your YES
       ↓
 Build               creates all files, runs npm install
       ↓
-Validation          runs build + tests, reports pass/fail
+Validation          build + tests must pass
       ↓
-Report              tells you where files are and what was built
+Code Review         subagent checks 10 security rules — PASS or FAIL
+      ↓
+Deploy              Vercel production deployment
+      ↓
+Approval Gate ←──── confirms live URL — waits for your YES
+      ↓
+GitHub Push         README + structured commit + repo creation
+      ↓
+Report              live URL · repo URL · build verdicts
 ```
 
-The agent **cannot skip phases** and **cannot write a single line of code before you approve the plan**. Human-in-the-loop by design, not as an afterthought.
+The agent cannot skip phases and cannot write a single line of code before you approve the plan. Built with AgentOps principles in mind — human-in-the-loop approval gates, multi-agent coordination, and a structured audit trail at every phase.
 
 ---
 
@@ -34,51 +42,88 @@ The agent **cannot skip phases** and **cannot write a single line of code before
 
 | | |
 |---|---|
-| Agent framework | Hermes Agent v0.14.0 |
-| Model | MiniMax M2.7 via OpenRouter |
-| Cost per build | ~$0.05 |
-| Interface | Discord |
+| Agent framework | [Hermes Agent](https://github.com/NousResearch/hermes-agent) v0.16.0 |
+| Model | DeepSeek V4 Flash via OpenRouter |
+| Interface | Discord (gateway mode) |
+| Deploy target | Vercel |
+| Version control | GitHub via `gh` CLI |
 | Runtime | WSL2 (Ubuntu) on Windows |
+| Default database | Neon (serverless Postgres) |
 
 ---
 
-## Project Layout
-
-Each app gets its own isolated folder, for example:
+## Repo Structure
 
 ```
-~/projects/
-├── todo-app/
-│   ├── PLAN.md       ← generated before any code is written
-│   └── src/
-├── restaurant-website/
-│   ├── PLAN.md
-│   └── ...
+autonomous-builder/
+├── SOUL.md                          # Agent identity and voice
+├── config.yaml                      # Hermes profile config (no secrets)
+└── skills/
+    └── software-development/
+        └── web-app-pipeline/
+            ├── SKILL.md             # 10-phase pipeline
+            └── references/
+                ├── security-rules.md        # 10 rules enforced at code review
+                ├── stack-rules.md           # Vercel constraints and stack choices
+                └── commit-readme-rules.md   # Commit format and README template
 ```
 
----
-
-## Key Files
-
-| File | Purpose |
-|---|---|
-| `SOUL.md` | Defines the agent's identity, pipeline phases, and constraints |
-| `config.yaml` | Hermes profile config (secrets removed — add your own keys) |
+The skill uses a progressive disclosure pattern — `SKILL.md` stays lean, reference documents load only during the phase that needs them.
 
 ---
 
-## Phase 2 — Roadmap
+## Security Model
 
-- [ ] GitHub push after each build
-- [ ] Vercel deployment + live URL reported to Discord
-- [ ] Docker containerisation
-- [ ] Stricter coding guardrails in SOUL.md (TypeScript, tests, input validation)
+Every build is reviewed by a subagent before deployment:
+
+- No secrets in source files or the browser bundle
+- All third-party API calls proxied server-side: `Browser → /api/* → Third-party API`
+- Security headers enforced via `vercel.json`
+- Rate limiting via Upstash Redis (never `express-rate-limit` with MemoryStore)
+- `.gitignore` validated — `.env`, `node_modules/`, `.vercel/`, `dist/` must be present
+- Any violation is an automatic FAIL — the pipeline stops, nothing deploys
+
+Full rules in `skills/software-development/web-app-pipeline/references/security-rules.md`.
 
 ---
 
-## Why This Matters
+## Apps Built With This Pipeline
 
-The approval gate pattern — where an autonomous agent cannot proceed without explicit human sign-off — mirrors the governance frameworks now recommended for agentic AI in regulated environments. This is Phase 1 of an ongoing exploration of human-in-the-loop autonomous pipelines.
+| Project | Stack | Live |
+|---------|-------|------|
+| Weather dashboard | React + Vite + OpenWeatherMap proxy | [View](https://weather-dashboard-six-dun.vercel.app/) |
+
+---
+
+## Installation
+
+```bash
+# Place the skill in your Hermes profile
+cp -r skills/software-development/web-app-pipeline \
+  ~/.hermes/profiles/<your-profile>/skills/software-development/
+
+# Copy SOUL.md and config.yaml to your profile
+cp SOUL.md ~/.hermes/profiles/<your-profile>/SOUL.md
+cp config.yaml ~/.hermes/profiles/<your-profile>/config.yaml
+
+# Add your tokens to the profile .env
+echo "GH_TOKEN=your_github_token" >> ~/.hermes/profiles/<your-profile>/.env
+echo "VERCEL_TOKEN=your_vercel_token" >> ~/.hermes/profiles/<your-profile>/.env
+
+# Start the gateway
+tmux new -s hermes '<your-profile> gateway run'
+```
+
+Then in Discord, start a new thread and type `/web-app-pipeline`.
+
+---
+
+## Roadmap
+
+- [ ] Observability tooling — trace pipeline runs and LLM calls end-to-end
+- [ ] Upstash Redis integration baked into the default stack
+- [ ] Bundle with `node-express-backend` and `systematic-debugging` skills
+- [ ] Publish to agentskills.io open standard registry
 
 ---
 
