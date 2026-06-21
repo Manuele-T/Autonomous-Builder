@@ -2,7 +2,7 @@
 
 > A Discord-controlled autonomous web app pipeline powered by [Hermes Agent](https://github.com/NousResearch/hermes-agent) by Nous Research.
 
-![First screenshot](./screenshots/01.png)
+![First screenshot](./screenshots/02.png)
 
 You describe what you want built. The agent clarifies, plans, waits for your approval, builds, runs a security review, deploys to Vercel, and pushes to GitHub — without you touching a terminal.
 
